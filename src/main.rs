@@ -1,5 +1,9 @@
 use anyhow::Result;
+use axum::Json;
 use axum::{self, http::StatusCode};
+use chrono::DateTime;
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use std::process;
 use tokio::{
     net::TcpListener,
@@ -7,7 +11,6 @@ use tokio::{
     signal::unix::{SignalKind, signal},
 };
 use tower_http::trace::TraceLayer;
-
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 pub fn init_tracing() {
@@ -74,10 +77,54 @@ async fn run() -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct TransactionContext {
+    id: String,
+    transaction: Transaction,
+    customer: Customer,
+    merchant: Merchant,
+    terminal: Terminal,
+    last_transaction: Option<LastTransaction>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Transaction {
+    amount: f64,
+    installments: u8,
+    requested_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Customer {
+    avg_amount: f64,
+    tx_count_24h: u8,
+    known_merchants: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Merchant {
+    id: String,
+    mcc: String,
+    avg_amount: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Terminal {
+    is_online: bool,
+    card_present: bool,
+    km_from_home: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct LastTransaction {
+    timestamp: DateTime<Utc>,
+    km_from_current: f64,
+}
+
 async fn ready() -> StatusCode {
     StatusCode::OK
 }
 
-async fn fraud_score() -> StatusCode {
+async fn fraud_score(Json(payload): Json<TransactionContext>) -> StatusCode {
     StatusCode::CREATED
 }
