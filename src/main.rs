@@ -64,6 +64,7 @@ fn main() {
 async fn run() -> Result<()> {
     let router = axum::Router::<()>::new()
         .route("/ready", axum::routing::get(ready))
+        .route("/fraud-score", axum::routing::post(fraud_score))
         .layer(TraceLayer::new_for_http());
 
     let listener = TcpListener::bind("0.0.0.0:8000").await?;
@@ -73,7 +74,10 @@ async fn run() -> Result<()> {
     Ok(())
 }
 
-#[axum::debug_handler]
 async fn ready() -> StatusCode {
     StatusCode::OK
+}
+
+async fn fraud_score() -> StatusCode {
+    StatusCode::CREATED
 }
