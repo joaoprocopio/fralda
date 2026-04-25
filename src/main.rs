@@ -1,11 +1,12 @@
 use anyhow::Result;
-use axum;
+use axum::{self, http::StatusCode};
 use std::process;
 use tokio::{
     net::TcpListener,
     runtime,
     signal::unix::{SignalKind, signal},
 };
+use tower_http::trace::TraceLayer;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -61,12 +62,18 @@ fn main() {
 }
 
 async fn run() -> Result<()> {
-    let router =
-        axum::Router::<()>::new().route("/ready", axum::routing::get(async || "hello, world!"));
+    let router = axum::Router::<()>::new()
+        .route("/ready", axum::routing::get(ready))
+        .layer(TraceLayer::new_for_http());
 
     let listener = TcpListener::bind("0.0.0.0:8000").await?;
 
     axum::serve(listener, router).await?;
 
     Ok(())
+}
+
+#[axum::debug_handler]
+async fn ready() -> StatusCode {
+    StatusCode::OK
 }
