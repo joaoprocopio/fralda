@@ -13,7 +13,9 @@ use tokio::{
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-pub fn init_tracing() {
+const FRAUD_SCORE_THRESHOLD: f64 = 0.6;
+
+fn init_tracing() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::fmt::layer()
@@ -24,7 +26,7 @@ pub fn init_tracing() {
         .init();
 }
 
-pub fn new_runtime() -> runtime::Runtime {
+fn new_runtime() -> runtime::Runtime {
     match runtime::Builder::new_current_thread().enable_all().build() {
         Ok(rt) => rt,
         Err(err) => {
@@ -34,7 +36,7 @@ pub fn new_runtime() -> runtime::Runtime {
     }
 }
 
-pub async fn shutdown_signal() -> Result<impl Future<Output = ()>> {
+async fn shutdown_signal() -> Result<impl Future<Output = ()>> {
     let mut terminate = signal(SignalKind::terminate())?;
     let mut interrupt = signal(SignalKind::interrupt())?;
 
@@ -71,8 +73,11 @@ async fn run() -> Result<()> {
         .layer(TraceLayer::new_for_http());
 
     let listener = TcpListener::bind("0.0.0.0:8000").await?;
+    let signal = shutdown_signal().await?;
 
-    axum::serve(listener, router).await?;
+    axum::serve(listener, router)
+        .with_graceful_shutdown(signal)
+        .await?;
 
     Ok(())
 }
@@ -121,10 +126,26 @@ struct LastTransaction {
     km_from_current: f64,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct FraudScore {
+    approved: bool,
+    fraud_score: f64,
+}
+
+impl FraudScore {
+    fn from_score(fraud_score: f64) -> Self {
+        let approved = fraud_score < FRAUD_SCORE_THRESHOLD;
+        Self {
+            approved,
+            fraud_score,
+        }
+    }
+}
+
 async fn ready() -> StatusCode {
     StatusCode::OK
 }
 
-async fn fraud_score(Json(payload): Json<TransactionContext>) -> StatusCode {
-    StatusCode::CREATED
+async fn fraud_score(Json(payload): Json<TransactionContext>) -> Json<FraudScore> {
+    Json(FraudScore::from_score(0.5))
 }
